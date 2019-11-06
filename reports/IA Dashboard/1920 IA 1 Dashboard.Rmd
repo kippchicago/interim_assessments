@@ -1,0 +1,596 @@
+---
+title: "1920 IA 1 Dashboard"
+
+output: 
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(gridExtra)
+library(formattable)
+library(webshot)
+library(ggrepel)
+library(dplyr)
+library(cowplot)
+library(grid)
+library(gridGraphics)
+library(DT)
+library(here)
+library(kippcolors)
+library(stringr)
+
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path=here('graphs/'),
+                      echo=FALSE, warning=FALSE, message=FALSE)
+
+#load(here("data/1819_IA_2.Rda"))
+# load(here("1819_dl_IA_3.Rda"))
+# load(here("1819_IA_3_primary.Rda"))
+load(here("data/1920_IA_1.Rda"))
+load(here("data/1920_dl_IA_1.Rda"))
+
+mid_string <- c("KAC", "KAMS", "KBCP", "KOA")
+middle <- enquo(mid_string)
+pri_string <- c("KACP", "KAP", "KOP")
+primary <- enquo(pri_string)
+```
+
+
+
+```{r}
+subjects <- paste("ELA",
+              "Math",
+              "Science",
+              "Algebra",sep = "|")
+
+
+ia_5_8_table <- regional_school_rollup %>% 
+  mutate(grade_level = stringr::str_extract(local_assessment_id, "0\\d"),
+         grade_level = as.double(grade_level),
+         subject = stringr::str_extract(local_assessment_id, subjects)) %>% 
+  filter(grade_level > 4) %>% 
+  tidyr::unite(Assessment, subject, grade_level, sep = " ") %>% 
+  mutate(Target = .70) %>% 
+  select(Assessment,
+         Target,
+         Region = reg_pct_correct,
+         !!middle) %>% 
+  bind_rows(pct_correct_school %>% 
+  ungroup() %>% 
+  select(-schoolid) %>% 
+  tidyr::spread(key = school_abbrev,
+                value = school_pct) %>% 
+    filter(grepl("05-8", subject)) %>% 
+    rename(Assessment = subject) %>% 
+    mutate(Target = .70) %>% 
+    left_join(pct_correct_reg,
+              by = c("Assessment" = "subject"))) %>% 
+  arrange(Assessment) %>% 
+  select(-!!primary)
+  
+db_table <- function(ia_table){
+  col_names <- colnames(ia_table)
+  ia_table %>% 
+  DT::datatable(rownames = FALSE,
+                  # width = "400px",
+                  # height = "300px",
+                  options = list(
+                    pageLength = nrow(ia_table),
+                    dom = "t",
+                    bSort = FALSE,
+                    autoWidth = TRUE
+                    # columnDefs = list(list(
+                    #   width = '100px', 
+                    #   targets = col_names))
+                  )) %>%
+    formatStyle(col_names[-c(1,2)],
+                background = styleInterval(c(.55, .70),
+                                           c("#fc8d59", 
+                                             #"#FF001A", #red
+                                             "white",
+                                           "#99d594")
+                                           #"#00CA3F") #green
+                ))  %>%
+    # formatStyle(col_names,
+    #             `font-size` = c('18px')
+    # ) %>%
+    formatPercentage(col_names[-1], 2) %>%
+    formatStyle(col_names, `font-family` = "Lato")
+
+}
+  
+
+
+db_table_b_band <- function(ia_table){
+  col_names <- colnames(ia_table)
+  ia_table %>% 
+  DT::datatable(rownames = FALSE,
+                  # width = "400px",
+                  # height = "300px",
+                  options = list(
+                    pageLength = nrow(ia_table),
+                    dom = "t",
+                    bSort = FALSE,
+                    autoWidth = TRUE,
+                    columnDefs = list(list(
+                      className = "dt-right",
+                      targets = 3))
+                  )) %>%
+    formatStyle(col_names[-c(1,2)],
+                color = styleEqual(0, rgb(0,202/255,63/255)
+                                   )
+                )  %>%
+    # formatStyle(col_names,
+    #             `font-size` = c('18px')
+    # ) %>%
+    formatPercentage(col_names[c(-1,-4)], 2) %>%
+    formatStyle(col_names, `font-family` = "Lato")
+
+}
+
+ia_3_4_table <- #p_regional_school_rollup %>% 
+  # filter(ia > 1) %>% 
+  # select(-ia) %>% 
+  regional_school_rollup %>% 
+  mutate(grade_level = stringr::str_extract(local_assessment_id, "0\\d"),
+         grade_level = as.double(grade_level),
+         subject = stringr::str_extract(local_assessment_id, "ELA|Math")) %>% 
+  filter(grade_level < 5) %>% 
+  tidyr::unite(Assessment, subject, grade_level, sep = " ") %>% 
+  mutate(Target = .70) %>% 
+  select(Assessment,
+         Target,
+         Region = reg_pct_correct,
+         !!primary) %>% 
+  bind_rows(#p_pct_correct_school %>% 
+              # filter(ia > 1) %>% 
+              # select(-ia) %>% 
+             pct_correct_school %>% 
+               filter(grepl("03-4", subject)) %>% 
+              ungroup() %>% 
+              select(-schoolid) %>% 
+              tidyr::spread(key = school_abbrev,
+                value = school_pct) %>% 
+              rename(Assessment = subject) %>% 
+              mutate(Target = .70) %>% 
+              left_join(#p_pct_correct_reg %>% 
+                          # filter(ia > 1) %>% 
+                          # select(-ia),
+                        pct_correct_reg,
+              by = c("Assessment" = "subject"))) %>% 
+  arrange(Assessment) %>% 
+  mutate(Assessment = gsub("00", "", Assessment))
+
+
+all_ela <- ia_3_4_table %>% 
+  filter(grepl("ELA", Assessment)) %>% 
+  bind_rows(ia_5_8_table %>% 
+  filter(grepl("ELA", Assessment)))
+
+
+```
+
+## Overall Percent Correct
+### ELA
+
+Note that KACP 4th took the 3rd grade ELA assessment
+
+```{r}
+all_ela %>% 
+  filter(grepl("3|4", Assessment)) %>% 
+  select(-!!middle) %>% 
+  db_table()
+
+all_ela %>%
+  filter(!grepl("3|4", Assessment)) %>%
+  select(-!!primary) %>%
+  db_table()
+
+```
+
+\
+\
+
+### Math
+
+```{r}
+ia_3_4_table %>% 
+  filter(grepl("Math", Assessment)) %>% 
+  db_table()
+ia_5_8_table %>% 
+  filter(grepl("Math|Algebra", Assessment)) %>% 
+  db_table()
+
+  # db_table()
+```
+
+\
+\
+
+### Science
+
+```{r}
+ia_5_8_table %>% 
+  filter(grepl("Sci", Assessment)) %>% 
+  db_table()
+```
+
+```{r sped}
+
+sped_table <- sped_grade_reg %>% 
+  mutate(Target = 0.7) %>% 
+  #filter(grade_level > 4) %>% 
+  mutate(Assessment = sprintf("DL %s %s", subject, grade_level)) %>% 
+  ungroup() %>% 
+  select(Assessment, 
+         Target,
+         Region,
+         !!primary,
+         !!middle) %>% 
+  bind_rows(sped_school_subject %>% 
+  tidyr::spread(school_abbrev,
+                pct_correct) %>%
+  left_join(sped_region,
+            by = "subj_grade") %>% 
+  mutate(Target = .7) %>%
+  ungroup() %>% 
+  select(Assessment = subj_grade,
+         Target,
+         Region = reg_pct_correct,
+         !!primary,
+         !!middle)) %>% 
+  arrange(Assessment)
+
+```
+
+\
+\
+
+### DL ELA
+
+```{r}
+sped_table %>% 
+  filter(grepl("ELA", Assessment),
+         grepl("3|4", Assessment)) %>% 
+  select(-!!middle) %>% 
+  db_table()
+
+sped_table %>% 
+  filter(grepl("ELA", Assessment),
+         !grepl("3|4", Assessment)) %>% 
+  select(-!!primary) %>% 
+  db_table()
+```
+
+\
+\
+
+### DL Math
+
+```{r}
+ sped_table %>% 
+  filter(grepl("Math", Assessment),
+         grepl("3|4", Assessment)) %>% 
+  select(-!!middle) %>% 
+  db_table()
+
+sped_table %>% 
+  filter(grepl("Math", Assessment),
+         !grepl("3|4", Assessment)) %>% 
+  select(-!!primary) %>% 
+  db_table()
+```
+
+\
+\
+
+## Not Yet Mastered
+
+**Percent of students in lowest perfomance band (averaged < 21% on the IA)**  
+
+* KOP had 1 student that scored in the lowest performance band across all tests in their first year administering IAs
+* DL students at KAP had 0 scores in the lowest performance band in both Math and ELA
+* KOA had at least two grade levels with 0 students in the lowest performance band in all subjects
+* KBCP had at least one grade level with 0 students in the lowest performance band in both gen ed Math and ELA
+
+\
+```{r out.width= "300pt"}
+school_region <- bottom_band_school_sub %>% 
+    tidyr::spread(school_abbrev,
+                  school_pct_btm_band) %>% 
+    left_join(bottom_band_reg,
+              by = "subject") %>% 
+    rename(Region = subj_pct_btm_band) %>% 
+    mutate(Assessment = subject,
+           Target = 0) %>% 
+    select(-subject)
+
+all_low_band <- bottom_band %>% 
+  mutate(grade_level = stringr::str_extract(local_assessment_id, "0\\d"),
+         grade_level = as.double(grade_level),
+         subject = stringr::str_extract(local_assessment_id, "ELA|Math|Science|Algebra")) %>% 
+  tidyr::unite(Assessment, subject, grade_level, sep = " ") %>% 
+  mutate(Target = 0) %>% 
+  ungroup() %>% 
+  select(Assessment,
+         Target,
+         Region = reg_pct,
+         !!primary,
+         !!middle) %>% 
+ # mutate(KAC = ifelse(Assessment %in% "Math 5", NA, KAC)) %>% 
+  bind_rows(school_region) %>% 
+  arrange(Assessment)
+
+n_btm_band_subj <- n_btm_band_grade %>% 
+  mutate(subject = gsub("3|4", "03-4", subject),
+         subject = gsub("[5-8]", "05-8", subject)) %>% 
+  group_by(subject) %>% 
+  summarize(not_yet = sum(not_yet),
+            n_students = sum(n_students)) %>% 
+  mutate(N = sprintf("%s/%s", not_yet, n_students)) %>% 
+  select(-not_yet,
+         -n_students)
+  
+n_btm_band <- n_btm_band_grade %>% 
+  group_by(subject) %>% 
+  summarize(not_yet = sum(not_yet),
+            n_students = sum(n_students)) %>% 
+  mutate(N = sprintf("%s/%s", not_yet, n_students)) %>% 
+  select(-not_yet,
+         -n_students) %>% 
+  bind_rows(n_btm_band_subj) %>% 
+  rename(Assessment = subject)
+```
+
+### ELA
+
+* 6th ELA had just 5 students in the lowest performance band
+* No school had more than 15% of their students in the lowest performance band for an ELA assessment
+
+```{r}
+all_low_band %>% 
+  filter(grepl("ELA (03|[3-4])", Assessment)) %>% 
+  left_join(n_btm_band,
+            by = "Assessment") %>% 
+  select(Assessment:Region,
+         N,
+         !!primary) %>% 
+  db_table_b_band()
+
+all_low_band %>% 
+  filter(grepl("ELA (05|[5-8])", Assessment)) %>% 
+  left_join(n_btm_band,
+            by = "Assessment") %>% 
+  select(Assessment:Region,
+         N,
+         !!middle) %>% 
+  db_table_b_band()
+```
+
+\
+\
+
+### Math
+
+* Less than 1% of all 6th graders were in the lowest performance band, the lowest regional percentage for all gen ed IAs
+* 5th Math at KAMS had no students in the lowest performance band
+
+```{r}
+all_low_band %>% 
+  filter(grepl("Math (03|[3-4])", Assessment)) %>% 
+  left_join(n_btm_band,
+            by = "Assessment") %>% 
+  select(Assessment:Region,
+         N,
+         !!primary) %>% 
+  db_table_b_band()
+
+all_low_band %>% 
+  filter(grepl("Algebra|Math (05|[5-8]|)", Assessment)) %>% 
+  left_join(n_btm_band,
+            by = "Assessment") %>% 
+  select(Assessment:Region,
+         N,
+         KAC:KOA,
+         -KAP) %>% 
+  distinct() %>%
+  filter(!grepl("th 3|th 4|03-4", Assessment)) %>%
+  db_table_b_band()
+
+```
+
+\
+\
+
+### Science
+
+* KOA had no students in the lowest performance band across all grades in Science
+* All grade levels and schools had less than 10 students score in the lowest performance band
+
+```{r}
+all_low_band %>% 
+  filter(grepl("Sci", Assessment)) %>% 
+  left_join(n_btm_band,
+            by = "Assessment") %>% 
+  select(Assessment:Region,
+         N,
+         !!middle) %>% 
+  db_table_b_band()
+  
+```
+
+\
+\
+
+
+```{r}
+
+sped_low_band <- sped_grade_b_band %>% 
+  tidyr::spread(school_abbrev,
+                pct) %>% 
+  ungroup() %>% 
+  tidyr::unite(Assessment, subject, grade_level, sep = " ") %>% 
+  left_join(sped_reg_b_band %>% 
+              tidyr::unite(Assessment, subject, grade_level, sep = " ") %>% 
+              rename(Region = pct),
+            by = "Assessment") %>% 
+  bind_rows(sped_school_b_band %>% 
+              tidyr::spread(school_abbrev,
+                            pct) %>% 
+              left_join(sped_reg_grade_b_band %>% 
+                          rename(Region = pct),
+              by = "subject") %>% 
+              rename(Assessment = subject)) %>% 
+  arrange(Assessment) %>% 
+   mutate(Assessment = sprintf("DL %s", Assessment),
+          Target = .0)
+ 
+```
+
+\
+\
+
+### DL ELA
+
+* Regionwide, 8th Grade only had one student score in the lowest band
+* KAC 6th and 7th DL ELA had 0 students in the lowest band
+
+```{r}
+n_dl_reg <- sped_school_b_band_0 %>% 
+  group_by(subject) %>% 
+  summarize(not_yet = sum(not_yet),
+            n_students = sum(n_students)) %>% 
+  mutate(N = sprintf("%s/%s", not_yet,n_students),
+         subject = sprintf("DL %s", subject)) %>% 
+  select(-c(not_yet,
+            n_students))
+
+n_dl_subj <- sped_grade_b_band_0 %>%  #need to find n students out of total 
+  ungroup() %>% 
+  mutate(subject = sprintf("DL %s %s", subject, grade_level)) %>% 
+  select(-n_students,
+         -grade_level,
+         -schoolid,
+         -pct) %>% 
+  right_join(total_students_sped_0,
+             by = c("subject",
+                    "school_abbrev")) %>% 
+  mutate(not_yet = if_else(is.na(not_yet), 0, as.double(not_yet))) %>% 
+  group_by(subject) %>% 
+  summarize(not_yet = sum(not_yet),
+            n_students = sum(n_students)) %>%
+  mutate(N = sprintf("%s/%s", not_yet, n_students)) %>%
+  select(subject, N)
+  
+  
+n_dl <- n_dl_reg %>% 
+  bind_rows(n_dl_subj)
+  
+sped_low_band %>% 
+  filter(grepl("ELA", Assessment),
+         grepl("3|4", Assessment)) %>% 
+  left_join(n_dl,
+            by = c("Assessment" = "subject")) %>% 
+  select(Assessment,
+         Target,
+         Region,
+         N, 
+         !!primary) %>% 
+  db_table_b_band()
+
+sped_low_band %>% 
+  filter(grepl("ELA (05|[5-8])", Assessment)) %>% 
+  left_join(n_dl,
+            by = c("Assessment" = "subject")) %>% 
+  select(Assessment,
+         Target,
+         Region,
+         N, 
+         !!middle) %>% 
+  db_table_b_band()
+```
+
+\
+\
+
+### DL Math
+
+* No 5th through 7th grade KOA student that took the DL Math assessment scored in the lowest performance band
+
+```{r}
+sped_low_band %>% 
+  filter(grepl("Math (03|[3-4])", Assessment)) %>% 
+  left_join(n_dl,
+            by = c("Assessment" = "subject")) %>% 
+  select(Assessment,
+         Target,
+         Region,
+         N, 
+         !!primary) %>% 
+  db_table_b_band()
+
+sped_low_band %>% 
+  filter(grepl("Math (05|[5-8])", Assessment)) %>% 
+  left_join(n_dl,
+            by = c("Assessment" = "subject")) %>% 
+  select(Assessment,
+         Target,
+         Region,
+         N, 
+         !!middle) %>% 
+  db_table_b_band()
+```
+
+\
+\
+
+## Graph - Not Yet Mastered
+
+**Percent of students in the lowest performance band**
+ 
+* 53% of IAs have less than 6% of students that took the assessment in the bottom performance band.  
+* 3rd and 4th DL Math and ELA have 1 student in the bottom band across the region
+* 7 IAs have three or fewer students in the bottom band
+
+```{r}
+low_bands_all_0 <- all_low_band %>% 
+  bind_rows(sped_low_band) %>% 
+  filter(!grepl("03-4|05-8", Assessment)) %>% 
+  mutate(grade = stringr::str_extract(Assessment, "\\d"),
+         Assessment = gsub(" \\d", "", Assessment)) %>% 
+  mutate(assessment = sprintf("%sth %s", grade, Assessment)) %>% 
+  select(assessment, Region) #%>% 
+  # filter(!assessment %in% c("4th DL ELA", "4th DL Math"))
+
+order_ias <-  low_bands_all_0 %>% 
+  mutate(assessment = ifelse(grepl("3th", assessment), str_replace_all(assessment, "3th", "3rd"), assessment)) %>%
+  arrange(Region) %>%
+  distinct()
+
+low_bands_all_0 %>% 
+  mutate(assessment = ifelse(grepl("3th", assessment), str_replace_all(assessment, "3th", "3rd"), assessment)) %>%
+  distinct() %>%
+  mutate(assessment = factor(assessment, levels = order_ias$assessment)) %>% 
+  mutate(percent = Region *100) %>% 
+  ggplot() +
+  geom_bar(aes(x = assessment, 
+               y = Region,
+               fill = assessment),
+           stat = "identity") +
+  geom_hline(yintercept = .05,
+             size = 5,
+             color = "gray") +
+  scale_fill_kipp("kipp_div", reverse = FALSE)+
+  scale_y_continuous(name = "% of students in lowest performance band") +
+  scale_x_discrete(name = "IA") +
+  theme_kipp_light() +
+  theme(axis.line = element_line(colour = "white"),
+        axis.text.x = element_text(angle = 45),
+        legend.position = "none")
+  
+```
+

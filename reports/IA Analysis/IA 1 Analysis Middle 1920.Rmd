@@ -1,0 +1,430 @@
+---
+title: "IA Analysis Middle Schools 19-20 IA 1"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+    toc_float: yes
+resource_files:
+- IA_3_db_cont.Rda
+header-includes: \usepackage{fancyhdr} \usepackage{graphicx} \usepackage{eurosym}
+  \usepackage{booktabs,xcolor} \pagestyle{fancy} \fancyhf{} \fancypagestyle{plain}{\pagestyle{fancy}}
+  \addtolength{\headheight}{0.5cm} \rhead{Interim Assessment 1 Analysis 19-20 - \today}
+  \lhead{\includegraphics[width=4cm]{KIPP Chicago Regional (Dark Blue).eps}} \fancyfoot[LE,RO]{Page
+  \thepage} \usepackage{pdflscape} \newcommand{\blandscape}{\begin{landscape}} \newcommand{\elandscape}{\end{landscape}}
+  \usepackage[default]{lato} \usepackage[T1]{fontenc}
+---
+
+```{r global_options, include=FALSE}
+library(ggplot2)
+library(gridExtra)
+library(formattable)
+library(webshot)
+library(ggrepel)
+library(dplyr)
+library(cowplot)
+library(grid)
+library(gridGraphics)
+library(DT)
+library(here)
+library(kippcolors)
+
+knitr::opts_chunk$set(fig.width=12, fig.height=10,
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+```{r}
+#load(here("data/IA_3_db_cont.Rda"))
+load(here("data/IA_1_db_cont.Rda"))
+#load(here("data/IA_2_db_cont_dl.Rda"))
+```
+
+The following analysis focuses on KIPP Chicago's three IA Goals: 
+
+  * 100% of students demonstrate mastery/proficiency of focus standards (70% or above)
+  * 80% of students demonstrate mastery of all standards (70% or above)
+  * 0% of students in the lowest performance band 
+
+ 
+## 100% of students demonstrate mastery/proficiency of standards (70% or above)  
+
+Graph 1. This graph breaks down the percent of students in each performance band by subject and grade level for 19-20 IA 1.  
+
+5th and 7th Science as well as 6th Math are the closest to achieving this goal for IA 1. 6th Math has the highest percent correct among Math, ELA, and Science IAs. Math mastery is higher than ELA mastery, and Science is higher than both with the exception of 6th grade. 
+
+Region-wide we see particular struggles with mastery in 6th through 8th ELA and 6th Science
+
+```{r}
+regional_mastery %>% 
+  filter(sy == "1920",
+         ia == 1,
+         !dl,
+         !grade_level %in% c("3", "4")) %>% 
+  mutate(label_pct = sprintf("%s%%", pct_mastered),
+         label_pct = if_else(pct_mastered < 1, "< 1%", label_pct )) %>% 
+  mutate(mastered_level = factor(mastered_level, levels = c("Not Yet",
+                                                            "Partially",
+                                                            "Near",
+                                                            "Mastered"))) %>%
+  ggplot() +
+  geom_bar(aes(x = mastered_level,
+               y = n_mastery,
+               fill = mastered_level),
+           stat = "identity") +
+  geom_text(aes(x = mastered_level,
+                      y = n_mastery + 50,
+                      label = label_pct),
+            size = 6) +
+  facet_grid(grade_level~subject) +
+  scale_fill_kipp("kipp_div", reverse = TRUE) +
+  theme_kipp_light() +
+  labs(x = "Mastery",
+       y = "Number of Students") +
+  # scale_y_discrete(limits = c(0, 100, 200, 300, 400),
+  #                  labels = c("0" = "0",
+  #                             "100" = "100",
+  #                             "200" = "200",
+  #                             "300" = "300", 
+  #                             "400" = "")) +
+  #theme_bw(base_family = "Lato") +
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1),
+        legend.position = "none",
+        text = element_text( size = 25))
+
+```
+\newpage  
+
+Graph 2. The following compares the percent of students mastering IAs (scoring 70%+) for 17-18 and 18-19 IAs 1, 2, and 3 and 19-20 IA 1. Science IAs did not begin until 17-18 IA 2.  
+
+19-20 mastery levels are exceeding 18-19 mastery levels for previous years' IA 1. ELA performance is still well below the Math and Science mastery levels, but improving from IA 1 and 3 last year.
+\
+```{r}
+regional_mastery %>% 
+  filter(mastered_level == "Mastered",
+         !grade_level %in% c("3", "4")) %>% #View()
+  group_by(sy,
+           ia,
+           subject) %>% 
+  summarize(n = sum(n_mastery),
+            nn = sum(n_total)) %>% 
+  bind_rows(science_1718 %>% 
+              filter(mastered_level == "Mastered") %>% 
+              group_by(sy,
+                       ia,
+                       subject) %>% 
+              summarize(n = sum(n_mastery),
+                        nn = sum(n_total))) %>% 
+    mutate(pct_mastery = n/nn,
+         label_p = sprintf("%s%%", round(pct_mastery *100,0)),
+         #label_p = if_else(label_p == "0%", "< 1%", label_p),
+         Goal = "Goal",
+         `Total Students` = "Total Students") %>% 
+  ggplot() +
+  geom_bar(aes(x = subject,
+               y = nn),
+           stat = "identity",
+           fill = "white",
+           color = "black"
+           ) +
+  geom_bar(aes(x = subject,
+               y = n,
+               fill = subject),
+           stat = "identity") +
+  geom_text(aes(x = subject,
+                y = n +200,
+                label = label_p),
+            size = 6) +
+  scale_fill_kipp("kipp_div", reverse = FALSE) +
+  scale_color_kipp("kipp_grays") +
+  facet_wrap(sy ~ ia)+
+  #theme_kipp_light(base_family = "Lato") +
+  theme_kipp_light() +
+  theme(legend.position = "none",
+        text = element_text(size = 20)) +
+  labs(x = "",
+       y = "") +
+  coord_flip()
+```
+\newpage
+
+## 80% of students demonstrate mastery of all standards (70% or above) 
+
+Graph 3. This graph displays the percent of students mastering all standards by grade level for 19-20 IA 1.  
+
+Science and Math once again have the highest mastery levels for all grades. 6th Math has the  highest mastery levels. ELA has the lowest number of students mastering all standards across all grades.
+
+\
+```{r}
+all_students_testing_grade %>% 
+  filter(!grade %in% c("3", "4")) %>% 
+  left_join(stds_100 %>% 
+              filter(!grade %in% c("3", "4")) %>% 
+  group_by(sy,
+           ia,
+           subject,
+           grade) %>% 
+  count(),
+  by = c("sy",
+         "ia",
+         "subject",
+         "grade")) %>% 
+  mutate(n = if_else(is.na(n), as.integer(0), n)) %>% #View()
+  mutate(pct_100_mastery = n/total_students,
+         label_p = sprintf("%s%%", round(pct_100_mastery *100,0)),
+         label_p = ifelse(pct_100_mastery < .01 & pct_100_mastery > 0, "< 1%", label_p),
+         Goal = "Goal",
+         `Total Students` = "Total Students") %>%
+  filter(sy == "1920",
+         ia == "1") %>% #View()
+  ggplot() +
+  geom_bar(aes(x = subject,
+               y = total_students),
+           stat = "identity",
+           fill = "white",
+           color = "black"
+           ) +
+  geom_bar(aes(x = subject,
+               y = n,
+               fill = subject),
+           stat = "identity") +
+  geom_text(aes(x = subject,
+                y = n+20,
+                label = label_p),
+            size = 6) +
+  scale_fill_kipp("kipp_div", reverse = FALSE) +
+  scale_color_kipp("kipp_grays") +
+  facet_wrap("grade")+
+ # theme_kipp_light(base_family = "Lato") +
+  theme_kipp_light()+
+  theme(legend.position = "none",
+        text = element_text(size = 20)) +
+  labs(x = "",
+       y = "",
+       title = "19-20 IA 1 - Mastery of All Standards") +
+  coord_flip()
+```
+\newpage
+
+Graph 4. Below summarizes the percent of students that have mastered all standards (scored a 70% or above on all standards) on 17-18 and 18-19 IAs as well as 19-20 IA 1.  
+
+In 19-20 IA 1, regional mastery of all standards jumped to it's highest percentage for Science and was brought back up to its 18-19 baseline for Math. ELA holds steady from 18-19. 
+ 
+
+\
+```{r}
+stds_100 %>% 
+  filter(!grade %in% c("3", "4")) %>% 
+  group_by(sy,
+           ia,
+           subject) %>% 
+  count() %>% 
+  left_join(all_students_testing_grade %>% 
+              filter(!grade %in% c("3", "4")) %>% 
+              group_by(sy,
+                       ia,
+                       subject)%>%
+              summarize(total_students = sum(total_students)),
+            by = c("sy",
+                   "ia",
+                   "subject")) %>% 
+  bind_rows(tribble(~"sy", ~"ia", ~"subject", ~"n", ~"total_students",
+                    "1718", "2", "Science",109, 1099,
+                    "1718", "3", "Science", 169, 1150)) %>% 
+  mutate(pct_100_mastery = n/total_students,
+         n_80 = n*.8,
+         label_p = sprintf("%s%%", round(pct_100_mastery *100,0)),
+         label_p = if_else(label_p == "0%", "< 1%", label_p),
+         Goal = "Goal",
+         `Total Students` = "Total Students") %>% 
+  ggplot() +
+  geom_bar(aes(x = subject,
+               y = total_students),
+           stat = "identity",
+           fill = "white",
+           color = "black"
+           ) +
+  geom_bar(aes(x = subject,
+               y = n,
+               fill = subject),
+           stat = "identity") +
+  geom_text(aes(x = subject,
+                y = n +100,
+                label = label_p),
+            size = 6) +
+  scale_fill_kipp("kipp_div", reverse = FALSE) +
+  scale_color_kipp("kipp_grays") +
+  facet_wrap(sy ~ ia)+
+  #theme_kipp_light(base_family = "Lato") +
+  theme_kipp_light() +
+  theme(legend.position = "none",
+        text = element_text(size = 20)) +
+  labs(x = "",
+       y = "") +
+  coord_flip()
+```
+\newpage
+
+## 0% of students in the lowest performance band
+
+Graph 1 (reproduced below) also demonstrates the percent of students in the lowest performance band by grade and subject for 19-20 IA 1.  
+
+6th, 7th and 8th Science and 7th ELA have the lowest number of students in the bottom band. 6th ELA also has a small number of students in the lowest performance band, although the mastered level is still low.
+
+Alternatively, 8th Math has highest number of students not yet mastering.
+
+\
+
+```{r}
+regional_mastery %>% 
+  filter(sy == "1920",
+         ia == 1,
+         !dl,
+         !grade_level %in% c("3", "4")) %>% 
+  mutate(label_pct = sprintf("%s%%", pct_mastered),
+         label_pct = if_else(pct_mastered < 1, "< 1%", label_pct )) %>% 
+  mutate(mastered_level = factor(mastered_level, levels = c("Not Yet",
+                                                            "Partially",
+                                                            "Near",
+                                                            "Mastered"))) %>%
+  ggplot() +
+  geom_bar(aes(x = mastered_level,
+               y = n_mastery,
+               fill = mastered_level),
+           stat = "identity") +
+  geom_text(aes(x = mastered_level,
+                      y = n_mastery + 50,
+                      label = label_pct),
+            size = 6) +
+  facet_grid(grade_level~subject) +
+  scale_fill_kipp("kipp_div", reverse = TRUE) +
+  theme_kipp_light() +
+  labs(x = "Mastery",
+       y = "Number of Students") +
+  # scale_y_discrete(limits = c(0, 100, 200, 300, 400),
+  #                  labels = c("0" = "0",
+  #                             "100" = "100",
+  #                             "200" = "200",
+  #                             "300" = "300", 
+  #                             "400" = "")) +
+  #theme_bw(base_family = "Lato") +
+  theme(axis.text.x = element_text(angle = 45,
+                                   hjust = 1),
+        legend.position = "none",
+        text = element_text( size = 25))
+
+```
+\newpage
+
+Graph 5. Percent of students in the lowest performance band, regionally across 17-18, 18-19, and 19-20.  
+
+The number of students in the lowest performance band increased for Math, both from the last assessment and IA 1 in 18-19. The percentage of students in the lowest band for ELA has decreased from previous years. 
+
+\
+
+```{r}
+all_students_testing_grade %>% 
+  filter(!grade %in% c("3", "4")) %>% 
+  group_by(sy,
+           ia,
+           subject) %>% 
+  summarise(total_students = sum(total_students)) %>% 
+  left_join(not_yet %>% 
+  filter(grepl("Not Yet", mastered_level),
+         !grepl("03|04", local_assessment_id)) %>% 
+  mutate(subject = stringr::str_extract(local_assessment_id, "ELA|Math|Science")
+  ) %>% 
+    group_by(sy, ia, subject) %>% 
+    summarise(n_low_band = sum(n_mastery)),
+  by = c("sy",
+         "ia",
+         "subject")
+  ) %>% 
+  bind_rows(science_1718 %>% 
+              filter(mastered_level == "Not Yet") %>% 
+              group_by(sy,
+                       ia,
+                       subject) %>% 
+              summarize(n_low_band = sum(n_mastery),
+                        total_students = sum(n_total))) %>% 
+  mutate(pct_not_mastered = n_low_band/total_students,
+         label_p = sprintf("%s%%", round(pct_not_mastered *100,0)),
+         label_p = if_else(pct_not_mastered < .01 &
+                             pct_not_mastered > 0,
+                           "< 1%",
+                           label_p)) %>% #View()
+  ggplot() +
+  geom_bar(aes(x = subject,
+               y = total_students),
+           stat = "identity",
+           fill = "white",
+           color = "black"
+           ) +
+  geom_bar(aes(x = subject,
+               y = n_low_band,
+               fill = subject),
+           stat = "identity") +
+  geom_text(aes(x = subject,
+                y = n_low_band +100,
+                label = label_p),
+            size = 6) +
+  facet_wrap(sy ~ ia)+
+  scale_fill_kipp("kipp_div", reverse = FALSE) +
+  scale_color_kipp("kipp_grays") +
+  theme_kipp_light() +
+ # theme_kipp_light(base_family = "Lato") +
+  theme(legend.position = "none",
+        text = element_text(size = 20)) +
+  labs(x = "",
+       y = "") +
+  coord_flip()
+```
+\newpage
+
+## Year Difference in Average Percent Correct
+
+Graph 6. The following compares 17-18, 18-19, and 19-20 IA difference in average percent correct scores each round.  
+
+The intention of this graph is to visually determine patterns in average percent correct scores. The slopes provide insight into how students average percent correct grew (or fell) for each school year and subject.
+
+IA 1 scores improved or stayed consistent across almost across grades from 17-18 to 18-19 to 19-20. 5th ELA, 5th Science and 7th Math increased the most
+
+An exception is 8th Math and a small decrease in 5th Math
+
+\
+```{r}
+reg_1_2_compare %>%  
+  filter(grade_level > 4,
+         !dl) %>% 
+  mutate(reg_pct_correct = reg_pct_correct *100,
+         label_pct = sprintf("%s%%", round(reg_pct_correct), 0)) %>% 
+ggplot() +
+  geom_line(aes(x = ia, 
+                y = reg_pct_correct, 
+                color = sy,
+                group = sy)) +
+  geom_point(aes(x = ia, 
+                 y = reg_pct_correct,
+                 color = sy)) +
+  facet_grid(grade_level~subject) +
+  ggrepel::geom_text_repel(aes(x = ia, 
+                       y = reg_pct_correct,
+                       label = label_pct,
+                       color = sy),
+                       size = 6, show.legend = FALSE) +
+  scale_y_continuous(breaks = c(20,40,60,80),
+                     limits = c(30,90))+
+  scale_color_kipp("kipp_bluegray", reverse = TRUE) +
+  theme_kipp_light() +
+ # theme_kipp_light(base_family = "Lato") +
+  labs(x = "IA",
+       y = "% Correct - by Region",
+       color = "SY") +
+  theme(text = element_text(size = 20))
+```
+\newpage
+
+
+
+

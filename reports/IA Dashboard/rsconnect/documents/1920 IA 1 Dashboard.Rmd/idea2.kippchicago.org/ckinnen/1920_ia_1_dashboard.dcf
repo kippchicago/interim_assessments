@@ -1,0 +1,12 @@
+name: 1920_ia_1_dashboard
+title: 1920 IA 1 Dashboard
+username: ckinnen
+account: ckinnen
+server: idea2.kippchicago.org
+hostUrl: https://idea2.kippchicago.org/__api__
+appId: 59
+bundleId: 308
+url: https://idea2.kippchicago.org/content/59/
+when: 1572984886.56211
+asMultiple: FALSE
+asStatic: TRUE
