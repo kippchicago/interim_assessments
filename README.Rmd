@@ -1,8 +1,8 @@
 ---
-output: html_document
+output: html_document 
 ---
 
-# File Structure for Teacher Reports
+# File Structure for Teacher Reports 
 
 ### 1. Scripts 
 Located in 1920_ia
