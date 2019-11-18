@@ -1,7 +1,3 @@
----
-output: html_document 
----
-
 # File Structure for Teacher Reports 
 
 ### 1. Scripts 
