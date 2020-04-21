@@ -1,0 +1,784 @@
+---
+title: "SY 19-20 Interim Assessment 2  \n`r params$school` `r params$subject` `r params$grade`th Grade"
+header-includes: 
+   \usepackage{fancyhdr}
+   \usepackage{graphicx} 
+   \usepackage{eurosym} 
+   \usepackage{booktabs,xcolor} 
+   \pagestyle{fancy} 
+   \fancyhf{}
+   \fancypagestyle{plain}{\pagestyle{fancy}}
+   \addtolength{\headheight}{0.5cm}
+   \rhead{`r params$subject` `r paste0(params$grade, 'th Grade')` Interim Assessment Report - \today} 
+  
+   \fancyfoot[LE,RO]{Page \thepage}
+   \usepackage{pdflscape}
+   \newcommand{\blandscape}{\begin{landscape}}
+   \newcommand{\elandscape}{\end{landscape}}
+   \usepackage[default]{lato}
+   \usepackage[T1]{fontenc}
+output: 
+  pdf_document:
+    latex_engine: xelatex
+always_allow_html: yes
+params:
+  school: KAMS
+  subject: ELA
+  grade: 7
+---
+
+```{r global_options, include=FALSE}
+
+#  \lhead{\includegraphics[width=4cm]{KIPP Chicago Regional (Dark Blue).eps}}
+
+library(ggplot2)
+library(gridExtra)
+library(formattable)
+library(webshot)
+library(ggrepel)
+library(dplyr)
+library(cowplot)
+library(grid)
+library(gridGraphics)
+library(DT)
+library(here)
+library(stringr)
+
+knitr::opts_chunk$set(fig.width=12, fig.height=8, fig.path=here('graphs/'),
+                      echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+```{r setup, include=FALSE}
+load(here("data/1920_IA_1.Rda"))
+#data/1718_IA_1.Rda
+#if(params$grade <= 4){
+source(here("lib/18_19_primary_helpers.R"))
+#} else{
+#source(here("lib/17_18_ia_helpers.R"))
+#}
+
+mid_string <- c("KAC", "KAMS", "KBCP", "KOA")
+middle <- enquo(mid_string)
+pri_string <- c("KACP", "KAP", "KOP")
+primary <- enquo(pri_string)
+```
+
+## 19-20 Goals  
+In the spirit of grounding us in an ambitious bar for students, we will use 70% as mastery/proficiency on end of modules and IAs.  
+
+  * 100% of students demonstrate mastery/proficiency of focus standards (70% or above)
+  * 80% of students demonstrate mastery of all standards (70% or above)
+  * 0% of students in the lowest performance band 
+\
+\
+
+
+**Table 1a. Average Percent Correct**  
+**`r full_name_subj(params$subject)` Multiple Choice (Reading)**    
+This table displays the average percent correct scored on Reading for each `r full_name_subj(params$subject)` grade level assessment.
+\
+```{r mc_avg_mastery}
+
+mc_grades <- ela_rollup_mc %>%
+  mutate(grade_level = as.double(str_extract(local_assessment_id,"0\\d"))) 
+           
+if (params$grade <= 4) {
+  mc_grades_filter <- mc_grades %>% 
+    filter(grade_level < 5) %>% 
+    select(local_assessment_id,
+           !!primary,
+           Region,
+           grade_level)
+} else{
+  mc_grades_filter <- mc_grades %>% 
+    filter(grade_level > 4) %>% 
+    select(-!!primary)
+}
+                     
+tab1_mc <- mc_grades_filter %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id)) %>%
+  select(-local_assessment_id) %>%
+  tidyr::gather(school, pct_correct, -grade_level) %>%
+  tidyr::spread(grade_level, pct_correct)
+
+
+dt_avg_mastery(tab1_mc) 
+```
+\
+\
+
+**Legend**
+```{r legend, out.width= "300pt"} 
+#px
+legend <- tribble(
+  ~pct, ~expectations,
+  "0 - 20%", "Did Not Yet Meet Expectations",
+  "21% - 40%", "Partially Met Expectations",
+  "41% - 69%", "Approaches Expectations",
+  "70% - 80%", "Met Expectations",
+  "81% and above", "Exceeds Expectations"
+) %>% 
+  t()
+
+ 
+
+legend %>%
+  DT::datatable(rownames = FALSE,
+                colnames = NULL,
+                 width = "50%",
+                 height = "60%",
+                 options = list(dom = "t",
+                                bSort = FALSE,
+                                autoWidth = FALSE,
+                                columnDefs = list(
+                                  list(width = '50px',
+                                       targets = c(0:4)))
+                                 )) %>%
+  formatStyle(c("V1", "V2","V3", "V4", "V5"),
+                backgroundColor = styleEqual( c(legend[1,], legend[2,]),
+                                              c("#FF001A", #red
+                                                "#FFBF42", #orange
+                                                "#FEFE56", #yellow
+                                                "#91FD57", #light green
+                                                "#00CA3F", #green
+                                                "#FF001A", #red
+                                                "#FFBF42", #orange
+                                                "#FEFE56", #yellow
+                                                "#91FD57", #light green
+                                                "#00CA3F" #green
+))
+              ) %>%
+  formatStyle(c("V1", "V2","V3", "V4", "V5"),
+                `font-size` = "12px",
+                `font-weight` = "bold",
+                `font-family` = "Calibri") 
+  
+```
+
+\newpage
+
+**Table 1b. Average Percent Correct**  
+**`r full_name_subj(params$subject)` Constructed Response (Writing)**  
+This table displays the average percent correct scored on Writing for each `r full_name_subj(params$subject)` grade level assessment.  
+ \
+```{r cr_avg_mastery}
+cr_grades <- ela_rollup_cr %>%
+  mutate(grade_level = as.double(str_extract(local_assessment_id,"0\\d"))) 
+
+if(params$grade <= 4){
+  cr_grades_filter <- cr_grades %>% 
+    filter(grade_level < 5) %>% 
+    select(local_assessment_id,
+           !!primary,
+           Region,
+           grade_level)
+} else{
+  cr_grades_filter <- cr_grades %>% 
+    filter(grade_level > 4) %>% 
+    select(-!!primary)
+}         
+tab1_cr <- cr_grades_filter %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id)) %>%
+  select(-local_assessment_id) %>%
+  tidyr::gather(school, pct_correct, -grade_level) %>%
+  tidyr::spread(grade_level, pct_correct)
+
+
+dt_avg_mastery(tab1_cr) 
+```
+
+\
+\
+**Table 1c. Average Percent Correct**  
+**`r full_name_subj(params$subject)` Overall**  
+This table displays the average percent correct scored for each `r full_name_subj(params$subject)` grade level assessment.  
+\
+```{r overall}
+reg_grades <- regional_school_rollup %>%
+  mutate(grade_level = as.double(str_extract(local_assessment_id,"0\\d"))) %>% 
+  rename(Region = reg_pct_correct)
+
+if(params$grade <= 4){
+  reg_grades_filter <- reg_grades %>% 
+    filter(grade_level < 5) %>% 
+    select(local_assessment_id,
+           !!primary,
+           Region,
+           grade_level)
+}else{
+  reg_grades_filter <- reg_grades %>% 
+    filter(grade_level > 4) %>% 
+    select(-!!primary)
+}
+
+tab1_avg_mastery <- reg_grades_filter %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id)) %>%
+  select(-local_assessment_id) %>%
+  tidyr::gather(school, pct_correct, -grade_level) %>%
+  tidyr::spread(grade_level, pct_correct) 
+
+
+dt_avg_mastery(tab1_avg_mastery) 
+```
+
+\newpage
+
+**Table 2. Grade Level View**  
+**Grade: `r params$grade`**  
+**`r full_name_subj(params$subject)`**  
+This table displays the average percent correct scored on `r full_name_subj(params$subject)` assessments by school and region for this grade
+
+```{r grade_level_view_data, out.width="300pt"} 
+#px
+grade_view_data <- reg_grades %>%
+  dplyr::filter(grade_level == params$grade,
+                grepl(params$subject, local_assessment_id)) %>%
+  mutate(local_assessment_id = paste(params$subject, "Overall", sep = " ")) %>%
+  rename(Assessment = local_assessment_id) %>%
+  select(-grade_level)
+
+grade_view_ela_mc <- ela_rollup_mc %>%
+  dplyr::filter(grepl(paste0(0,params$grade), local_assessment_id)) %>%
+  mutate(local_assessment_id = "  Multiple Choice (Reading)") %>%
+  rename(Assessment = local_assessment_id)
+
+grade_view_ela_cr <- ela_rollup_cr %>%
+  dplyr::filter(grepl(paste0(0,params$grade), local_assessment_id)) %>%
+  mutate(local_assessment_id = "  Constructed Response (Writing)") %>%
+  rename(Assessment = local_assessment_id)
+
+ela_grade_view <- bind_rows(grade_view_ela_mc,
+                            grade_view_ela_cr,
+                            grade_view_data
+                            )
+
+
+if(params$grade <= 4){
+ela_grade_view_col <- ela_grade_view %>%
+  select(-!!middle)
+} else{
+  ela_grade_view_col <- ela_grade_view %>%
+  select(-!!primary)
+}
+
+ela_grade_level_view(ela_grade_view_col)
+
+```
+\
+\
+
+**Table 3. Standards View**  
+**Grade: `r params$grade`**  
+**`r full_name_subj(params$subject)`**   
+This table displays average percent correct scored by `r full_name_subj(params$subject)` standard for a given grade, across all schools and region.  
+```{r set_width_1}
+if(params$grade <=4){
+  o_w <- "350pt"
+}else{
+  o_w <- "\\textwidth"
+}
+```
+
+```{r standards_view, out.width= o_w}
+grade_level_std <- stds_school_reg %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                grade_level == params$grade) %>% #params$grade
+  group_by(custom_code, number_of_questions, school) %>%
+  summarise(pct_correct = sum(pct_correct)) %>%
+  tidyr::spread(key = school,
+                value = pct_correct)
+
+region_stds_view <- stds_school_reg %>% 
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                grade_level == params$grade) %>% #params$grade
+  group_by(grade_level, custom_code) %>% 
+  summarise(reg_total_pts = sum(total_pts), 
+            reg_n_correct = sum(n_correct), 
+            reg_pct_correct = reg_n_correct/reg_total_pts) %>%
+  ungroup() %>%
+  select(custom_code,
+         reg_pct_correct)
+
+stds_grade_region <- grade_level_std %>% 
+  inner_join(region_stds_view,
+             by = "custom_code")
+
+if(params$grade <= 4){
+region_school <- reg_grades %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                grade_level == params$grade) %>% #params$grade
+  mutate(Standards = "Total") %>%
+  select(Standards,
+         !!primary,
+         Region)
+  
+grade_stds_view <- region_school %>%
+  bind_rows(stds_grade_region %>%
+              rename(Standards = custom_code,
+                     `Number of Items` = number_of_questions,
+                     Region = reg_pct_correct)) %>% 
+  filter(!Standards %in% "Total") %>% 
+  select(Standards,
+         `Number of Items`,
+         !!primary,
+         Region)
+
+}else{
+  region_school <- reg_grades %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                grade_level == params$grade) %>% #params$grade
+  mutate(Standards = "Total") %>%
+  select(Standards,
+         c(`KAC`:Region))
+  
+grade_stds_view <- region_school %>%
+  bind_rows(stds_grade_region %>%
+              rename(Standards = custom_code,
+                     `Number of Items` = number_of_questions,
+                     Region = reg_pct_correct)) %>% 
+  filter(!Standards %in% "Total") %>% 
+  select(Standards,
+         `Number of Items`,
+         !!middle,
+         Region)
+}
+
+dt_stds_view(grade_stds_view)
+
+```
+
+\newpage
+
+**Table 4a. Percent Not Yet Mastered**  
+**Grade: `r params$grade`**  
+**`r full_name_subj(params$subject)`**  
+This table displays the percent of students by school and region scoring in the bottom performance band (averaged 20% or less on the assessment).  
+```{r set_width_2}
+if(params$grade <=4){
+  o_w <- "300pt"
+}else{
+  o_w <- "\\textwidth"
+}
+```
+
+```{r not_yet_mastered, out.width= o_w}
+
+bottom_band_params <- bottom_band %>%
+  mutate(grade_level = stringr::str_extract(local_assessment_id, "0\\d"),
+         grade_level = as.double(grade_level)) %>% 
+  filter(grepl(params$subject, local_assessment_id),
+         grade_level == params$grade) %>% 
+  mutate(Assessment = params$subject) %>% 
+  rename(Region = reg_pct) %>% 
+  ungroup() 
+
+if(params$grade <=4){
+  bottom_band_filter <- bottom_band_params %>% 
+  select(Assessment,
+         !!primary,
+         Region)
+}else{
+  bottom_band_filter <- bottom_band_params %>% 
+  select(Assessment,
+         !!middle,
+         Region)
+}
+
+bottom_band_filter %>% 
+  not_yet_mastered()
+```
+\
+\
+**Table 4b. Percent Mastered**  
+**Grade: `r params$grade`**  
+**`r full_name_subj(params$subject)`**  
+Below is the percent of students that mastered (scored 70% or above) each standard.  
+```{r set width 3}
+if(params$grade <=4){
+  o_w <- "300pt"
+}else{
+  o_w <- "\\textwidth"
+}
+```
+
+```{r mastered, out.width= o_w}
+
+mastered_band_params <- mastered_band %>%
+  mutate(grade_level = stringr::str_extract(local_assessment_id, "0\\d"),
+         grade_level = as.double(grade_level)) %>% 
+  filter(grepl(params$subject, local_assessment_id),
+         grade_level == params$grade) %>% 
+  ungroup() %>% 
+  select(-local_assessment_id) %>% 
+  rename(Region = reg_pct,
+         Standards = custom_code) %>% 
+  ungroup() 
+
+if(params$grade <= 4){
+  mastered_band_filter <- mastered_band_params %>% 
+    select(Standards,
+           !!primary,
+           Region)
+}else{
+  mastered_band_filter <- mastered_band_params %>% 
+    select(Standards,
+           !!middle,
+           Region)
+}
+
+mastered_band_filter %>% 
+  mastered()
+```
+
+
+\newpage
+
+**Graph 1. Average Percent Correct Across Grades**  
+This graph shows the average percent correct on `r full_name_subj(params$subject)` grade level assessments across all schools. The vertical line represents the regional average.  
+```{r regional_avg_dev}
+if(params$grade <= 4){
+ord_school <- assess_summary_hr_reg %>%
+  ungroup() %>%   
+  select(school) %>%
+   unique() %>%
+  filter(school %in% !!primary) %>% 
+   arrange(desc(school))
+}else{
+  ord_school <- assess_summary_hr_reg %>%
+  ungroup() %>%   
+  select(school) %>%
+   unique() %>%
+  filter(school %in% !!middle) %>% 
+   arrange(desc(school))
+}
+
+avg_pct_line_graph <- reg_grades_filter %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id)) %>%
+  tidyr::gather(schools, 
+                pct_correct, 
+                -c(local_assessment_id, 
+                   grade_level, 
+                   Region)) %>%
+   mutate(pct_correct = round(pct_correct * 100,1),
+         reg_pct_correct = round(Region * 100,1),
+         line_0 = "Regional Average") %>%
+   mutate(dot_color_c = ifelse(pct_correct < reg_pct_correct, 
+                               "red", "black"),
+          schools = factor(schools, levels = ord_school$school)) 
+
+```
+
+
+
+```{r line_pct_correct, dev = "cairo_pdf"}
+line_pct_correct(avg_pct_line_graph)
+```
+
+\newpage
+
+**Graph 2. Average Percent Correct - Homeroom Comparison**  
+This graph compares average percent correct by grade level homerooms across schools. The vertical line represents the grade level average.  
+```{r homeroom_level_data}
+
+ord_grade <- assess_summary_hr_reg %>%
+  dplyr::filter(grade_level == params$grade) %>%
+  group_by(school) %>%
+  arrange(school, home_room) %>%
+  ungroup() %>%
+  select(home_room) %>%
+  unique()
+
+home_rm_data <- assess_summary_hr_reg %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                grade_level == params$grade) %>% #params$grade
+  mutate(avg_pct_correct = round(pct_correct * 100,1),
+         grade_pct_correct = round(grade_pct_correct * 100, 1),
+         dot_color_c = ifelse(avg_pct_correct < grade_pct_correct,
+                                  "red", "black"),
+         home_room = factor(home_room, levels = ord_grade$home_room))
+
+
+            
+```
+
+
+```{r homeroom_comparison, dev = "cairo_pdf"}
+home_room_avg(home_rm_data)
+
+```
+
+\newpage
+
+```{r homerooms}
+list_homerooms <- assess_summary_hr_reg %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                school == params$school, #params$school
+                grade_level == params$grade) %>% #params$grade
+  select(home_room) %>%
+  unique()
+```
+
+
+**Graph 3. Standards Mastered Grade Level View**  
+This graph displays the mastery level of students for each standard.  
+```{r hist_student_names, fig.height=15, dev = "cairo_pdf"}
+list_standards <- stds_school_reg %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                school == params$school, #params$school
+                grade_level == params$grade) %>%
+  select(custom_code) %>%
+  arrange(custom_code) %>%
+  unique()
+
+stds_mastery_grade_data <-
+  student_stds %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                school_abbrev == params$school, #params$school
+                grade_level == params$grade #params$grade
+                #grepl("Fisk", home_room) #for all homerooms
+               ) %>%
+  mutate(mastered_level = factor(mastered_level,
+                                 levels = c("Mastered",
+                                            "Near Mastery",
+                                            "Partially",
+                                            "Not Yet Mastered"))) %>%
+  tidyr::unite(firstlast,
+               first_name,
+               last_name,
+               sep = " ") %>%
+  group_by(home_room,
+           custom_code,
+           mastered_level) %>%
+  unique() %>%
+  mutate(pct_rank = row_number(pct_correct))
+
+
+### 1/23 section
+
+# stds_mastery_grade_data <-
+#   student_stds %>%
+#   dplyr::filter(grepl(params$subject, local_assessment_id),
+#                 school_abbrev == params$school, #params$school
+#                 grade_level == params$grade #params$grade
+#                 #grepl("Fisk", home_room) #for all homerooms
+#                ) %>%
+#   mutate(mastered_level = factor(mastered_level,
+#                                  levels = c("Mastered",
+#                                             "Near Mastery",
+#                                             "Partially",
+#                                             "Not Yet Mastered"))) %>%
+#   # tidyr::unite(firstlast,
+#   #              first_name,
+#   #              last_name,
+#   #               sep = " ") %>%
+#   mutate(firstlast = str_c(first_name, last_name, sep = " ")) 
+# # %>%      # moved until after middle name join
+#   # group_by(home_room,
+#   #          custom_code,
+#   #          mastered_level) %>%
+#   # unique() %>%
+#   # mutate(pct_rank = row_number(pct_correct))
+# 
+# 
+# middle_name_join <- function(file) {
+#   repeats <- file %>%
+#     group_by(local_student_id, firstlast) %>%
+#     summarize() %>%
+#     ungroup() %>%
+#     select(-local_student_id) %>%
+#     count(firstlast) %>%
+#     filter(n > 1)
+#   
+#   if(nrow(repeats) > 0) {
+#     file <- file %>%
+#       filter(firstlast == repeats$firstlast) %>%
+#       mutate(middlefirstlast = str_c(first_name, middle_name, last_name, sep = " "))
+#   } else {
+#     # file <- repeats %>%
+#     #   rbind(file)
+#     file <- file[1,] %>%
+#       mutate(middlefirstlast = str_c(first_name, last_name, sep = " "))
+#   }
+# 
+#   return(file)
+# 
+# }
+# 
+# middle_name_join_file <- middle_name_join(stds_mastery_grade_data)
+# # added to catch students in same homeroom with same first and last name
+# 
+# stds_mastery_grade_data <- stds_mastery_grade_data %>%
+#   ungroup() %>%
+#   left_join(middle_name_join_file %>% 
+#               ungroup() %>%
+#               select(local_student_id, middlefirstlast), 
+#             by = "local_student_id") %>% 
+#   mutate(firstlast = ifelse(is.na(middlefirstlast), firstlast, middlefirstlast)) %>% 
+#   select(-middlefirstlast) %>%
+#   group_by(#home_room, 
+#           # teacher_name,
+#            custom_code, 
+#            mastered_level) %>%
+#   unique() %>%
+#   mutate(pct_rank = row_number(percent_correct))
+
+# Added 1/23/20 MAKE SURE IT WORKS
+
+
+n_stds <- nrow(list_standards)
+pages <- ceiling(n_stds / 4)
+cut_off <- ceiling(n_stds/pages)
+
+print_hr_stds_table <- function(stds_cut_off, home_room){
+cat(sprintf("**%s - %sth Grade** \n ", params$school, params$grade),
+    sprintf("**%s** \n ", home_room), sep = "\n")
+print(stds_mastered_grade_level(stds_mastery_grade_data %>%
+                            dplyr::filter(custom_code %in% list_standards$custom_code[1:stds_cut_off]),
+                          home_room))
+cat("\\newpage")
+cat("\n")
+
+if(n_stds > stds_cut_off &
+   n_stds < stds_cut_off*2){
+  cat(sprintf("**%s - %sth Grade** \n ", params$school, params$grade),
+    sprintf("**%s Continued** \n ", home_room), sep = "\n")
+  print(stds_mastered_grade_level(stds_mastery_grade_data %>%
+                            dplyr::filter(custom_code %in% list_standards$custom_code[(stds_cut_off+1):n_stds]),
+                            home_room))
+   }
+
+if(n_stds >= (stds_cut_off*2)){
+cat(sprintf("**%s - %sth Grade** \n ", params$school, params$grade),
+    sprintf("**%s Continued** \n ", home_room), sep = "\n")
+  print(stds_mastered_grade_level(stds_mastery_grade_data %>%
+                            dplyr::filter(custom_code %in% list_standards$custom_code[(stds_cut_off+1):(stds_cut_off*2)]),
+                            home_room))
+
+cat("\\newpage")
+cat("\n")
+} 
+
+if(n_stds > (stds_cut_off*2) &
+     n_stds <= (stds_cut_off*3)){
+cat(sprintf("**%s - %sth Grade** \n ", params$school, params$grade),
+    sprintf("**%s Continued** \n ", home_room), sep = "\n")
+  print(stds_mastered_grade_level(stds_mastery_grade_data %>%
+                            dplyr::filter(custom_code %in% list_standards$custom_code[((stds_cut_off*2)+1):n_stds]),
+                            home_room))
+cat("\\newpage")
+cat("\n")
+  } else if(n_stds > (stds_cut_off*3)){
+    cat(sprintf("**%s - %sth Grade** \n ", params$school, params$grade),
+    sprintf("**%s Continued** \n ", home_room), sep = "\n")
+  print(stds_mastered_grade_level(stds_mastery_grade_data %>%
+                            dplyr::filter(custom_code %in% list_standards$custom_code[((stds_cut_off*2)+1):(stds_cut_off*3)]),
+                            home_room))
+cat("\\newpage")
+cat("\n")
+  }
+
+ if(n_stds > (stds_cut_off*3) &
+     n_stds <= (stds_cut_off*4)){
+cat(sprintf("**%s - %sth Grade** \n ", params$school, params$grade),
+    sprintf("**%s Continued** \n ", home_room), sep = "\n")
+  print(stds_mastered_grade_level(stds_mastery_grade_data %>%
+                            dplyr::filter(custom_code %in% list_standards$custom_code[((stds_cut_off*3)+1):n_stds]),
+                            home_room))
+cat("\\newpage")
+cat("\n")
+ }else if(n_stds > (stds_cut_off*4)){
+    cat(sprintf("**%s - %sth Grade** \n ", params$school, params$grade),
+    sprintf("**%s Continued** \n ", home_room), sep = "\n")
+  print(stds_mastered_grade_level(stds_mastery_grade_data %>%
+                            dplyr::filter(custom_code %in% list_standards$custom_code[((stds_cut_off*3)+1):(stds_cut_off*4)]),
+                            home_room))
+cat("\\newpage")
+cat("\n")
+  }
+  
+if(n_stds >= (stds_cut_off*5)){
+cat(sprintf("**%s - %sth Grade** \n ", params$school, params$grade),
+    sprintf("**%s Continued** \n ", home_room), sep = "\n")
+  print(stds_mastered_grade_level(stds_mastery_grade_data %>%
+                            dplyr::filter(custom_code %in% list_standards$custom_code[((stds_cut_off*4)+1):n_stds]),
+                            home_room))
+cat("\\newpage")
+cat("\n")
+ }
+}
+
+
+```
+
+```{r, results = 'asis', fig.height=15, dev = "cairo_pdf"}
+list_homerooms$home_room %>% 
+purrr::walk(~print_hr_stds_table(cut_off, .x))
+
+```
+\newpage
+
+**Graph 4. Standards Mastered Homeroom View**  
+<!-- **`r params$school` - `r list_homerooms$home_room[1]`**     -->
+This graph displays students' mastery level of assessment standards by homeroom. The number of standards not mastered can be easily identified.  
+```{r, dev = "cairo_pdf"}
+
+students_stds <- student_stds %>%
+  filter(local_student_id != 50429262)
+# remove student who had three assessment scores
+
+print_color_map <- function(home_room_name){
+number_mastered <- stds_mastery_grade_data %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                home_room == home_room_name) %>% #
+  group_by(student_id, firstlast, mastered_level) %>%
+  summarise(total_mastered = n()) %>%
+  tidyr::spread(key = mastered_level,
+                value = total_mastered) %>% 
+  filter(student_id != 5717)
+
+name_ord_0 <-  stds_mastery_grade_data %>%
+  dplyr::filter(grepl(params$subject, local_assessment_id),
+                home_room == home_room_name) %>%
+  filter(student_id != 5717) %>%
+  ungroup() %>%
+  select(custom_code, firstlast, mastered_level, student_id) %>% 
+  mutate(m_level_2 = case_when(
+    mastered_level == "Mastered" ~ 3,
+    mastered_level == "Near Mastery" ~ 2,
+    mastered_level == "Partially" ~ 1, 
+    TRUE ~ 0
+  )) %>%
+  select(-mastered_level) %>% 
+  tidyr::spread(custom_code, m_level_2)
+
+ss_colnames_0 <- grep("CCSS|DLM|SCI", colnames(name_ord_0))
+
+ss_colnames_1 <- colnames(name_ord_0)[ss_colnames_0]
+
+name_ord_1 <- name_ord_0 %>% 
+  arrange_(.dots = paste("desc(", ss_colnames_1, ")")) %>%
+  select(firstlast)
+
+cat(sprintf("**%s - %s** \n", params$school, home_room_name), sep = "\n")
+
+# print(student_mastery_homeroom(number_mastered, stds_mastery_grade_data, 
+# cat("\\newpage")
+# cat("\n")
+# }
+
+print(student_mastery_homeroom(number_mastered, stds_mastery_grade_data, 
+                         order_db = name_ord_1, colnames_db = ss_colnames_1)) 
+cat("\\newpage")
+cat("\n")
+}
+
+
+```
+
+```{r, results = 'asis', dev = "cairo_pdf"}
+list_homerooms$home_room %>% 
+purrr::walk(~print_color_map(.x))
+
+```
+
