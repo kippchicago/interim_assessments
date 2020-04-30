@@ -65,15 +65,20 @@ mastery_pct_correct <- assessment_stus_rev %>%
            TRUE ~ "NA")) %>%
   left_join(schools %>% 
               select(-school_name),
-            by = "schoolid")
+            by = "schoolid") %>% 
+  
+  # converting numeric school and grade level columns to character
+  # in order for anti fuzzy join to table of tests/schools/grade levels that need to be removed
+  
+  mutate(schoolid = as.character(schoolid),                 
+         grade_level = as.character(grade_level)) %>%        
+  fuzzy_anti_join(filter_out_tests, by = c("local_assessment_id", "schoolid", "grade_level"),
+                  match_fun = str_detect) %>%
+  mutate(schoolid = as.double(schoolid),
+         grade_level = as.integer(grade_level))
 
-# CAROLINE STOPPED HERE
 
 not_yet <- mastery_pct_correct %>% 
-  filter(!(grepl("04.ELA.1", local_assessment_id) & schoolid == 400146 & grade_level == 4),
-         !(grepl("03.ELA.1", local_assessment_id) & schoolid == 400146 & grade_level == 4),
-         !(grepl("03.ELA.1", local_assessment_id) & schoolid == 4001462 & grade_level == 4),
-         !(grepl("08.Math", local_assessment_id) & schoolid == 400180 & grade_level == 7)) %>% 
   select(local_assessment_id,
          sy,
          ia,
@@ -96,12 +101,7 @@ not_yet <- mastery_pct_correct %>%
   mutate(pct_mastery = n_mastery/n_total)
 
 regional_mastery <- mastery_pct_correct %>% 
-  filter(!(grepl("04.ELA.1", local_assessment_id) & schoolid == 400146),
-         !(grepl("03.ELA.1", local_assessment_id) & schoolid == 400146),
-         !(grepl("03.ELA.1", local_assessment_id) & schoolid == 4001462 & grade_level == 4),
-         !(grepl("08.Math", local_assessment_id) & schoolid == 400180 & grade_level == 7)) %>% 
-  group_by(#local_assessment_id,
-    ia,
+  group_by(ia,
     sy,
     subject,
     dl,
@@ -115,10 +115,7 @@ regional_mastery <- mastery_pct_correct %>%
   mutate(nn = sum(n)) %>% 
   rename(n_mastery = n,
          n_total = nn) %>% 
-  mutate(#subject = stringr::str_extract(local_assessment_id, "ELA|Math|Science"),
-    #        grade = stringr::str_extract(local_assessment_id, "0\\d"),
-    #        grade = gsub("0", "", grade),
-    mastered_level = if_else(mastered_level == "Near Mastery", "Near",
+  mutate(mastered_level = if_else(mastered_level == "Near Mastery", "Near",
                              if_else(mastered_level == "Not Yet Mastered", "Not Yet", mastered_level)),
     mastered_level = factor(mastered_level, levels = c("Not Yet",
                                                        "Partially",
@@ -129,11 +126,9 @@ regional_mastery <- mastery_pct_correct %>%
     label_pct = sprintf("%s%%", pct_mastered),
     label_pct = sprintf("%s\n(%s)", label_pct, n_mastery)) 
 
+# CAROLINE LEFT OFF HERE
+
 ids_ia_1_2 <-  mastery_pct_correct %>%
-  filter(!(grepl("04.ELA.1", local_assessment_id) & schoolid == 400146),
-         !(grepl("03.ELA.1", local_assessment_id) & schoolid == 400146),
-         !(grepl("03.ELA.1", local_assessment_id) & schoolid == 4001462 & grade_level == 4),
-         !(grepl("08.Math", local_assessment_id) & schoolid == 400180 & grade_level == 7)) %>% 
   filter(sy == "1920",
          ia == "1",
          !dl) %>% #select(local_assessment_id) %>% unique()
