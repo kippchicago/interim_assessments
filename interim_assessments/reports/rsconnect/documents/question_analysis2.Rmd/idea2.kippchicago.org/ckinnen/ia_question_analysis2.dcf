@@ -1,0 +1,12 @@
+name: ia_question_analysis2
+title: IA Question Analysis
+username: ckinnen
+account: ckinnen
+server: idea2.kippchicago.org
+hostUrl: https://idea2.kippchicago.org/__api__
+appId: 92
+bundleId: 430
+url: https://idea2.kippchicago.org/content/92/
+when: 1589217593.19382
+asMultiple: TRUE
+asStatic: FALSE

@@ -1,0 +1,580 @@
+---
+title: "Question Analysis"
+output: html_document
+runtime: shiny
+---
+
+#### Identifing average scores for Gen Ed IA items
+
+* Item scores based on KOA students only
+* Note some questions could be repeated across years but appear as separate items
+* Use the slider under Mean Score (Percent) to filter the range of values and the select under Subject to filter the Subjects shown
+
+```{r global_options, include=FALSE}
+
+bq_auth_file <-Sys.getenv("BQ_AUTH_FILE")
+
+bigrquery::bq_auth(path = bq_auth_file)
+
+library(silounloadr)
+library(tidyverse)
+library(ggplot2)
+library(gridExtra)
+library(formattable)
+library(dplyr)
+library(cowplot)
+library(grid)
+library(gridGraphics)
+library(DT)
+library(here)
+library(stringr)
+library(shiny)
+library(shinydashboard)
+library(bigrquery)
+
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+```{r, parameters}
+# narrowing down to the assessment IDs we need so we can filter on this later
+
+gened_ias <- c(45664,
+45663,
+45662,
+45665,
+45667,
+70732,
+70733,
+70504,
+70962,
+70735,
+70965,
+70972,
+70966,
+61095,
+61096,
+70734,
+70731,
+70971,
+71052,
+71184,
+71256,
+72861,
+73363,
+73307,
+72868,
+73667,
+73981,
+72849,
+72850,
+72937,
+73375,
+73361,
+73270,
+73527,
+73388,
+73380,
+73386,
+75169,
+75184,
+75108,
+75194,
+75484,
+75482,
+75604,
+75514,
+75500,
+75501,
+75483,
+75428,
+75558,
+75196,
+75625,
+75198,
+93909,
+72937,
+75169,
+79406,
+61095,
+79674,
+75184,
+79404,
+79405,
+73375,
+61096,
+79403,
+70734,
+79402,
+79401,
+75108,
+73361,
+79400,
+70731,
+75194,
+79399,
+79398,
+73270,
+79397,
+71052,
+73388,
+79678,
+75484,
+79679,
+79680,
+73527,
+70971,
+75482,
+79676,
+79677,
+99390,
+70732,
+72861,
+40826,
+34906,
+75604,
+79716,
+79714,
+70733,
+45662,
+40835,
+34907,
+73363,
+75514,
+79710,
+79711,
+79717,
+45665,
+40836,
+34909,
+70504,
+75500,
+73307,
+79705,
+79706,
+79703,
+45667,
+40837,
+72868,
+34908,
+70962,
+75501,
+79718,
+79700,
+79701,
+71184,
+73380,
+79690,
+75483,
+79691,
+79692,
+79687,
+73386,
+75428,
+71256,
+79689,
+79688,
+70735,
+45669,
+45663,
+40828,
+34901,
+75558,
+92987,
+100516,
+73667,
+95386,
+45668,
+75196,
+40827,
+34904,
+70965,
+92988,
+79695,
+79685,
+73981,
+45666,
+40831,
+93869,
+72849,
+75625,
+34903,
+70972,
+100518,
+79683,
+45664,
+40830,
+72850,
+75198,
+34902,
+70966,
+100519,
+79698,
+79682)
+
+```
+
+```{r, helpers}
+drop_fivetran_cols <- function(data){
+  data %>% 
+    select(-starts_with("_fivetran"))
+}
+
+```
+
+
+```{r, bq_tables}
+
+fields <- get_illuminate("fields") %>% 
+  dplyr::filter(assessment_id %in% gened_ias) %>%
+  collect(n = Inf)
+
+field_responses <- get_illuminate("field_responses") %>%
+  collect(n = Inf) 
+
+responses <- get_illuminate("responses") %>% 
+  collect(n = Inf)
+
+field_standards <- get_illuminate("field_standards") %>%
+  collect() %>%
+  select(field_id, standard_id)
+
+student_responses <- get_illuminate("students_assessments_responses") %>% 
+  dplyr::filter(assessment_id %in% gened_ias) %>%
+  collect(n = Inf)
+
+student_assessments <- get_illuminate("students_assessments") %>%
+  dplyr::filter(assessment_id %in% gened_ias) %>%
+  collect(n = Inf)
+
+students <- get_illuminate("students", "public") %>%
+  select(student_id,
+         local_student_id) %>%
+  collect()
+
+ps_stus <- get_powerschool("students") %>% 
+  drop_fivetran_cols %>%
+  select(
+    studentid = id,
+    first_name,
+    last_name,
+    grade_level,
+    schoolid,
+    home_room,
+    student_number) %>%
+  collect()
+
+standards <- get_illuminate("standards", schema = "standards") %>%
+  drop_fivetran_cols() %>%
+  collect()
+
+assessments <- get_illuminate("assessments") %>% 
+  filter(assessment_id %in% gened_ias) %>% 
+  collect()
+
+schools <- tibble(schoolid = c(78102, 7810, 400146, 4001462, 400163, 4001802, 400180),
+                  school_name = c("Ascend Primary", "Ascend Middle", "Academy", "Academy Primary", "Bloom", "One Primary", "One Academy"),
+                  school_abbrev =c("KAP", "KAMS", "KAC", "KACP", "KBCP", "KOP", "KOA"))
+
+
+
+```
+
+```{r, munge_fields}
+
+munged_fields <- fields %>%
+  select(field_id,
+         assessment_id,
+         is_rubric,
+         max_points = maximum,
+         q_order = sheet_label,
+        # sheet_responses
+        ) %>%
+  left_join(field_responses %>%
+              select(field_id,
+                     points,
+                     response_id,
+                     ), by = "field_id") %>%
+  left_join(field_standards, by = "field_id") %>%
+  left_join(standards %>%
+              select(standard_id,
+                     custom_code), by = "standard_id") %>% 
+  select(-standard_id) %>%
+  group_by(field_id, assessment_id, is_rubric, max_points, q_order) %>%
+  unique() %>% 
+  summarise(points = paste(points, collapse = " "),
+         response_ids = paste(response_id, collapse = " "),
+         all_standards = paste(custom_code, collapse = " ")) %>%
+  mutate(question_type = case_when(
+    is_rubric == TRUE ~ "Rubric",
+    is_rubric == FALSE & nchar(points) == 1 ~ "Multiple Choice",
+    is_rubric == FALSE & nchar(points) != 1 ~ "Multiple Select"
+  ))
+
+munged_fields$all_standards <- sapply(strsplit(as.character(munged_fields$all_standards), " "), function(x) paste(unique(x), collapse = ", "))
+
+```
+
+
+```{r, munge_student_responses}
+
+munged_student_responses <- student_responses %>%
+  filter(assessment_id %in% gened_ias) %>%
+  select(student_assessment_response_id,
+         assessment_id,
+         field_id,
+         student_response_id = response_id,
+         student_assessment_id,
+         is_deleted = `_fivetran_deleted`) %>%
+  filter(is.na(is_deleted)) %>%
+  select(-is_deleted) %>%
+  left_join(student_assessments %>%
+              select(student_assessment_id,
+                     assessment_id,
+                     student_id), by = c("assessment_id", "student_assessment_id")) %>% 
+   select(-c(student_assessment_response_id, student_assessment_id)) %>% unique() %>%
+  left_join(students, by = "student_id") %>%
+  left_join(ps_stus %>% select(
+    studentid,
+    local_student_id = student_number, 
+    schoolid) %>%
+      mutate(local_student_id = as.character(local_student_id)), by = "local_student_id") 
+  
+
+```
+
+```{r, combined}
+
+combined_fields_responses <- munged_student_responses %>%
+  left_join(munged_fields, by = c("field_id", "assessment_id")) %>% 
+  select(student_id,
+         assessment_id,
+         all_standards,
+         q_order,
+         question_type,
+         max_points,
+         correct_response_ids = response_ids,
+         points,
+         student_response_id,
+         schoolid) %>%
+  left_join(schools, by = "schoolid") %>%
+  filter(schoolid == 999999 | schoolid == 400180)
+
+```
+
+```{r, responses_lookup}
+
+responses_lookup <- combined_fields_responses %>%
+  select(assessment_id,
+         q_order,
+         question_type,
+         correct_response_ids,
+         points) %>%
+  separate_rows(correct_response_ids, points, sep = " ") %>% 
+  unique() %>%
+  mutate(correct_response_ids = as.integer(correct_response_ids))
+
+```
+
+```{r, student_q_credit}
+
+student_q_credit <- combined_fields_responses %>%
+  select(-c(correct_response_ids, points)) %>%
+  left_join(responses_lookup %>% rename(student_response_id = correct_response_ids), 
+            by = c("assessment_id", "q_order", "question_type", "student_response_id")) %>%
+  mutate(points = case_when(
+    is.na(points) ~ 0,
+    TRUE ~ as.double(points) 
+  )) %>%
+  mutate(student_credit = points/max_points) %>%
+  select(-c(student_response_id)) %>%
+  left_join(assessments %>% select(assessment_id, local_assessment_id), 
+            by = "assessment_id")
+
+```
+
+```{r, question_analysis}
+
+question_analysis <- student_q_credit %>% 
+  group_by(assessment_id, all_standards, q_order, question_type) %>%
+  summarize(mean_q_credit = mean(student_credit),
+            number_of_students = n()) %>%
+  mutate(mean_q_credit = round(mean_q_credit, 3)) %>%
+  filter(mean_q_credit != 0) %>%
+  ungroup() %>%
+  left_join(assessments %>% select(assessment_id, local_assessment_id), 
+            by = "assessment_id") %>% 
+  mutate(grade_level = as.factor(str_replace(str_extract(local_assessment_id, "03|04|05|06|07|08"), "0", "")),
+         question_type = as.factor(question_type),
+         subject = as.factor(str_extract(local_assessment_id, "ELA|Math|Science")),
+         mean_q_credit = mean_q_credit * 100,
+         school_abbrev = "KOA",
+         school_year = as.factor(str_extract(local_assessment_id, "1718|1819|1920"))) %>%
+  filter(grade_level %in% c(5,6,7,8)) %>%
+  select(`School Year` = school_year,
+    `Grade Level` = grade_level,
+         School = school_abbrev,
+         Subject = subject,
+         `Assessment ID` = local_assessment_id,
+         `Question Order` = q_order,
+         `Question Type` = question_type,
+         Standards = all_standards,
+         `N` = number_of_students,
+         `Mean Score (Percent)` = mean_q_credit)
+
+```
+
+```{r}
+
+datatable(question_analysis,
+          extensions = 'Buttons',
+          filter = 'top', 
+          rownames = FALSE, 
+          options = list(dom = 'Bfrtip', buttons = c('copy', 'excel'), pageLength = 20))
+
+```
+
+
+
+##### The distribution of the mean scores by question type and subject is shown below. Note it does not change with different filters to the data table but will change with different Grade Level inputs selected below
+
+
+
+```{r}
+# question_analysis %>%
+#   ggplot(aes(`Mean Score (Percent)`, fill = Subject), aes = .5) +   
+#   kippcolors::scale_fill_kipp(palette = "kipp_qual") +
+#   geom_density() +
+#   theme_minimal() +
+#   labs(title = "Distribution of Student Question Scores") +
+#   facet_wrap(vars(`Question Type`))
+  
+```
+
+```{r}
+
+ui = fluidPage(
+  inputPanel(
+  selectizeInput("grade", label = "Grade Level", 
+              choices = c(5, 6, 7, 8), selected = c(5,6,7,8), multiple = TRUE)),
+  
+  fluidRow(column(width = 12,
+                  plotOutput(outputId = "plot")))
+)
+
+server = function(input,output) {
+  output$plot = 
+  renderPlot({
+    question_analysis %>%
+      filter(`Grade Level` %in% input$grade) %>%
+      ggplot(aes(`Mean Score (Percent)`, fill = Subject)) +   
+      kippcolors::scale_fill_kipp(palette = "kipp_qual") +
+      geom_density(alpha = .6) +
+      theme_minimal() +
+      labs(title = "Distribution of Student Question Scores") +
+      facet_wrap(vars(`Question Type`))
+})
+
+} 
+  
+#options = list(height = 500)
+
+
+
+shinyApp(ui, server, options = list(height = 500))
+
+```
+
+
+```{r}
+
+# inputPanel(
+#   sliderInput("mean_filter", label = "Range of Average Score",
+#               min = 0, max = 100, value = 30, step = .05),
+# 
+#    # checkboxGroupInput(inputId = "grade_check", label = "Grade Level",
+#    #                    choices = c(3,4,5,6,7,8), selected = c(3,4,5,6,7,8)),
+#   
+#   selectizeInput(inputId = "grade_check", label = "Grade Level",
+#                                   choices = c(5,6,7,8),
+#                                   selected = c(5,6,7,8),
+#                                   multiple = TRUE),
+#   
+# )
+# 
+# # grade level
+# # standards
+# # school id
+# 
+# # DL
+# 
+# 
+#  renderDataTable({
+# 
+#    datatable(question_analysis %>% filter(`Mean Score (Percent)` <= input$mean_filter &
+#                                    `Grade Level` %in% input$grade_check),
+#            extensions = 'Buttons',
+#            filter = 'top',
+#            options = list(dom = 'Bfrtip', buttons = c('copy', 'excel'), pageLength = 10),
+#            rownames = FALSE)
+#  })
+# 
+# renderPlot({
+#   question_analysis %>%
+#     filter(`Mean Score (Percent)` <= input$mean_filter &
+#           `Grade Level` %in% input$grade_check) %>%
+#     ggplot(aes(x = `Mean Score (Percent)`)) +
+#     geom_density(fill = "#17345B") +
+#     theme_minimal() +
+#     labs(title = "Distribution of Average Question Scores")
+# })
+
+
+
+```
+
+
+```{r}
+# 
+# inputPanel(
+#   checkboxGroupInput("loc_assess_id", label = "Assessment ID",
+#                      choices = c("KAP", "KAC", "KAMS", "KOA",
+#                                  "KBCP", "KACP"), selected = "KOA"),
+# 
+#   numericInput("q_num", label = "Question Number",
+#                min = 1, max = 30, step = 1),
+#   
+#     selectizeInput(inputId = "school_name",  
+#                                   label = "Select School",
+#                                   choices = c("KAMS", "KOA", "KBCP", "KAC", 
+#                                               "KAP", "KOP", "KACP"),
+#                                   selected = c("KAMS", "KOA", "KBCP", "KAC", 
+#                                                "KAP", "KOP", "KACP"),
+#                                   multiple = TRUE)
+# 
+# )
+# 
+# renderPlot({
+#   student_q_credit %>%
+#     filter(#`Mean Score` <= input$mean_filter,
+#            local_assessment_id %in% input$loc_assess_id,
+#            q_order == input$q_num,
+#            school_abrev %in% input$school_name) %>%
+#     ggplot(aes(x = student_credit)) +
+#     geom_density(fill = "#BCD631") +
+#     theme_minimal() +
+#     labs(title = "Distribution of Student Question Scores")# +
+#     #coord_cartesian(ylim=c(0, 10))
+# })
+
+```
+
+
+
+```{r}
+
+#write_csv(question_analysis, "~/Downloads/table.csv")
+
+```
+
+
