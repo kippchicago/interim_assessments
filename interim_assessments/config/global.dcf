@@ -8,7 +8,7 @@ munging: TRUE
 logging: FALSE
 logging_level: INFO
 load_libraries: FALSE
-libraries: reshape2, fuzzyjoin, plyr, tidyverse, stringr, lubridate, silounloadr, stringr, forcats, gridExtra, googledrive, googlesheets4, here, kippcolors, dbplyr
+libraries: reshape2, fuzzyjoin, plyr, tidyverse, stringr, lubridate, silounloadr, forcats, gridExtra, googledrive, googlesheets4, here, kippcolors, dbplyr,rlist, magrittr
 as_factors: FALSE
 tables_type: tibble
 attach_internal_libraries: FALSE
